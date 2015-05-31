@@ -43,12 +43,6 @@ propagate (layer:layers) inputs =
 
 
 
--- the deltas
-type LayersD = [LayerD]
-type LayerD = [NeuronD]
-type NeuronD = [Double]
-
-
 
 type Errors = [[Double]]
 
@@ -72,12 +66,34 @@ backpropagate ls os t =
   error (show ("backpropagate", ls, os, t))
 
 
-test = mapM_ test trainingData
+type Deltas = [[[Double]]]
+
+updates :: LayersOutput -> Errors -> Deltas
+updates [_] [] = []
+updates (output:outputs) (error:errors) =
+  [ [ err * out
+    | out <- (1:output) ]
+  | err <- error ]
+  : updates outputs errors
+
+applyUpdates learningRate net ups =
+  map auLayer $ zip net ups
+  where auLayer (neurons, layerUpdates) =
+          map auNeuron $ zip neurons layerUpdates
+        auNeuron (weights, updates) =
+          zipWith (+) weights $ map (*learningRate) updates
+
+test = test initialNetwork $ cycle trainingData
   where
-    net = initialNetwork
-    test (inputs, targetOutputs) =
+    test net1 ((inputs, targetOutputs):moreTrainingData) =
       do print (inputs, targetOutputs)
-         let lo = propagate net inputs
-         print ("prop", lo)
-         let errors = backpropagate net ([]:lo) targetOutputs
-         print ("errors", errors)
+         let lo = propagate net1 inputs
+         -- print ("prop", lo)
+         let []:errors = backpropagate net1 ([]:lo) targetOutputs
+         -- print ("errors", errors)
+         print $ last errors
+         let ups = updates (inputs:lo) errors
+         -- print ("ups", ups)
+         let net2 = applyUpdates 0.1 net1 ups
+         test net2 moreTrainingData
+         
